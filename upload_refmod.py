@@ -1,17 +1,19 @@
 import os
 import shutil
 
+try:
+    import folder_paths
+except Exception:  # pragma: no cover - ComfyUI may not expose this on import.
+    folder_paths = None
+
 
 def _safe_refmods_dir():
     candidates = []
-    try:
-        import folder_paths
+    if folder_paths is not None:
         try:
             candidates.extend(folder_paths.get_folder_paths("refmods"))
         except Exception:
             pass
-    except Exception:
-        pass
 
     candidates.extend([
         os.path.join("/root/comfy/ComfyUI", "models", "refmods"),
@@ -40,6 +42,15 @@ def _sanitize_name(name):
     return value.replace("/", "_").replace("\\", "_")
 
 
+def _list_refmods():
+    root = _safe_refmods_dir()
+    if not os.path.isdir(root):
+        return ["None"]
+
+    files = sorted(f for f in os.listdir(root) if f.endswith(".safetensors"))
+    return files if files else ["None"]
+
+
 def _valid_refmod_file(path):
     if not os.path.isfile(path) or not path.endswith(".safetensors"):
         return False
@@ -58,59 +69,43 @@ def _valid_refmod_file(path):
 
 
 class HRmodUploadRefMod:
-    """
-    Save an uploaded .safetensors file into the active refmods folder so the
-    existing Load H3 RefMods node can discover it by name.
-    """
+    """Choose an existing refmod from the folder or upload a new one from the browser."""
 
     @classmethod
     def INPUT_TYPES(cls):
+        files = _list_refmods()
+        default = files[0] if files and files[0] != "None" else "None"
         return {
             "required": {
-                "file_path": ("STRING", {
-                    "default": "",
-                    "tooltip": "Path to the uploaded .safetensors file on the Modal filesystem."
-                }),
-                "name": ("STRING", {
-                    "default": "uploaded_refmod",
-                    "tooltip": "Name used when writing the file into models/refmods."
-                }),
+                "refmod_name": (files, {
+                    "default": default,
+                    "tooltip": "Choose a .safetensors file already in models/refmods."
+                })
             }
         }
 
-    RETURN_TYPES = ("STRING", "STRING")
-    RETURN_NAMES = ("saved_path", "status")
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("file_path",)
     FUNCTION = "upload"
     CATEGORY = "HRmod/files"
 
-    def upload(self, file_path="", name="uploaded_refmod"):
-        file_path = str(file_path).strip().strip('"')
-        if not file_path:
-            raise ValueError("No file_path was provided.")
-        if not os.path.isfile(file_path):
-            raise ValueError(f"File not found: {file_path}")
-        if not file_path.endswith(".safetensors"):
-            raise ValueError("Only .safetensors files are supported.")
-        if not _valid_refmod_file(file_path):
-            raise ValueError("The file does not look like a valid MiniMax H3 RefMod .safetensors.")
+    def upload(self, refmod_name=""):
+        if not refmod_name or refmod_name == "None":
+            raise ValueError("No refmod selected.")
 
         root = _safe_refmods_dir()
-        clean = _sanitize_name(name)
-        target = os.path.join(root, clean + ".safetensors")
-        idx = 2
-        while os.path.exists(target):
-            target = os.path.join(root, f"{clean}_{idx}.safetensors")
-            idx += 1
-
-        shutil.copy2(file_path, target)
-        return (target, f"Saved to {target}")
+        full_path = os.path.join(root, refmod_name)
+        if not os.path.isfile(full_path):
+            raise ValueError(f"RefMod file not found: {full_path}")
+        if not full_path.endswith(".safetensors"):
+            raise ValueError("Only .safetensors files are supported.")
+        if not _valid_refmod_file(full_path):
+            raise ValueError("The file does not look like a valid MiniMax H3 RefMod .safetensors.")
+        return (full_path,)
 
 
 class HRmodDownloadRefMod:
-    """
-    Take the output of Create H3 RefMod and save a file so the browser can
-    download it through a URL.
-    """
+    """Save a generated refmod bundle to disk and return a browser-download URL."""
 
     @classmethod
     def INPUT_TYPES(cls):
