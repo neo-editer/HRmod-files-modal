@@ -4,28 +4,27 @@ from aiohttp import web
 
 
 def register_modal_download_route(server):
-    """Expose a download route for the temp download directory created by HRmodDownloadRefMod."""
     @server.routes.get("/refmods/download")
     async def refmods_download(request):
         filename = request.query.get("file", "")
         if not filename:
             return web.Response(status=400, text="Missing file parameter")
 
-        downloads = []
-        base_roots = [
+        roots = []
+        for base in [
             os.path.join("/root/comfy/ComfyUI", "models", "refmods", "_downloads"),
             os.path.join("/root", "comfy", "ComfyUI", "models", "refmods", "_downloads"),
-        ]
-        for root in base_roots:
-            if os.path.isdir(root):
-                downloads.append(root)
+            os.path.join("/root/comfy/ComfyUI", "models", "refmods"),
+        ]:
+            if os.path.isdir(base):
+                roots.append(base)
 
-        if not downloads:
-            return web.Response(status=404, text="No refmod download directory found")
-
-        for root in downloads:
+        for root in roots:
             candidate = os.path.join(root, filename)
             if os.path.isfile(candidate):
-                return web.FileResponse(candidate, headers={"Content-Disposition": f'attachment; filename="{os.path.basename(filename)}"'})
+                return web.FileResponse(
+                    candidate,
+                    headers={"Content-Disposition": f'attachment; filename="{os.path.basename(filename)}"'}
+                )
 
-        return web.Response(status=404, text="File not found")
+        return web.Response(status=404, text=f"File not found: {filename}")
