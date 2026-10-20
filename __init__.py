@@ -6,10 +6,22 @@ except Exception as exc:
     NODE_DISPLAY_NAME_MAPPINGS = {}
 
 try:
-    from .modal_routes import register_modal_download_route, register_modal_upload_route
+    from .image_upload_refmod import HRmodUploadImagesForRefMod
+    NODE_CLASS_MAPPINGS["HRmodUploadImagesForRefMod"] = HRmodUploadImagesForRefMod
+    NODE_DISPLAY_NAME_MAPPINGS["HRmodUploadImagesForRefMod"] = "Upload Images for HRefMod"
+except Exception as exc:
+    print(f"[HRmod/files] Failed to import image_upload_refmod: {exc}")
+
+try:
+    from .modal_routes import (
+        register_modal_download_route,
+        register_modal_upload_route,
+        register_modal_image_upload_route,
+    )
 except Exception:
     register_modal_download_route = None
     register_modal_upload_route = None
+    register_modal_image_upload_route = None
 
 try:
     from server import PromptServer
@@ -18,6 +30,8 @@ try:
             register_modal_download_route(PromptServer.instance)
         if register_modal_upload_route is not None:
             register_modal_upload_route(PromptServer.instance)
+        if register_modal_image_upload_route is not None:
+            register_modal_image_upload_route(PromptServer.instance)
 except Exception:
     pass
 
