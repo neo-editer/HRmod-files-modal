@@ -1,8 +1,11 @@
 import os
 import shutil
 
+<<<<<<< HEAD
 from comfy_api.latest import io
 
+=======
+>>>>>>> parent of c9afa94 (Add safe ComfyUI-compatible upload/dropdown workflow, JS picker, and server routes for Modal refmod downloads/uploads.)
 
 def _safe_refmods_dir():
     candidates = []
@@ -113,6 +116,10 @@ class HRmodDownloadRefMod:
     Take the output of Create H3 RefMod and save a file so the browser can
     download it through a URL.
     """
+<<<<<<< HEAD
+=======
+
+>>>>>>> parent of c9afa94 (Add safe ComfyUI-compatible upload/dropdown workflow, JS picker, and server routes for Modal refmod downloads/uploads.)
     @classmethod
     def INPUT_TYPES(cls):
         return {
