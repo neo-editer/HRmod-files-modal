@@ -2,8 +2,11 @@ import os
 import shutil
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 from comfy_api.latest import io
 
+=======
+>>>>>>> parent of c9afa94 (Add safe ComfyUI-compatible upload/dropdown workflow, JS picker, and server routes for Modal refmod downloads/uploads.)
 =======
 >>>>>>> parent of c9afa94 (Add safe ComfyUI-compatible upload/dropdown workflow, JS picker, and server routes for Modal refmod downloads/uploads.)
 
@@ -117,7 +120,10 @@ class HRmodDownloadRefMod:
     download it through a URL.
     """
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> parent of c9afa94 (Add safe ComfyUI-compatible upload/dropdown workflow, JS picker, and server routes for Modal refmod downloads/uploads.)
 
 >>>>>>> parent of c9afa94 (Add safe ComfyUI-compatible upload/dropdown workflow, JS picker, and server routes for Modal refmod downloads/uploads.)
     @classmethod
