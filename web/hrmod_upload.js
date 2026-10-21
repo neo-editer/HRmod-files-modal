@@ -29,55 +29,82 @@ function uniqueSafetensorsFiles(files) {
   return unique;
 }
 
+const DROPZONE_MIN_H = 96;
+
 app.registerExtension({
   name: "HRmod.UploadButton",
   async beforeRegisterNodeDef(nodeType, nodeData, app) {
     if (nodeData.name !== "HRmodUploadRefMod") return;
 
+    nodeType.canvasOnly = true;
+
     const onNodeCreated = nodeType.prototype.onNodeCreated;
     nodeType.prototype.onNodeCreated = function () {
       onNodeCreated?.apply(this, arguments);
 
+      const node = this;
       const combo = this.widgets.find((w) => w.name === "refmod_name");
       if (!combo) return;
+
+      // ── real DOM drop zone (same approach as ComfyUI-Multi-Image-Loader-neo) ──
+      const root = document.createElement("div");
+      root.style.cssText = "display:flex;flex-direction:column;gap:6px;width:100%;box-sizing:border-box;padding:2px 0;";
+
+      const dropZone = document.createElement("div");
+      dropZone.style.cssText = `
+        display:flex;flex-direction:column;justify-content:center;align-items:center;
+        border:2px dashed #5a7abf;border-radius:10px;padding:14px 10px;text-align:center;
+        cursor:pointer;color:#8ebaff;font-size:12px;font-family:sans-serif;
+        background:rgba(60,90,150,0.15);transition:background .2s,border-color .2s;
+        user-select:none;min-height:${DROPZONE_MIN_H}px;box-sizing:border-box;
+      `;
+      dropZone.innerHTML = `
+        <div style="font-size:18px;margin-bottom:2px;">📦</div>
+        <div><strong>Drop .safetensors files here</strong> or <strong>click to browse</strong></div>
+        <div class="hrmod-status" style="opacity:.7;margin-top:6px;font-size:10px;min-height:12px;"></div>
+      `;
+      const statusEl = dropZone.querySelector(".hrmod-status");
 
       const fileInput = document.createElement("input");
       fileInput.type = "file";
       fileInput.accept = ".safetensors";
       fileInput.multiple = true;
       fileInput.style.display = "none";
-      document.body.appendChild(fileInput);
+
+      root.appendChild(dropZone);
+      root.appendChild(fileInput);
+
+      // Keep the node selected when interacting with the DOM widget.
+      root.addEventListener("mousedown", () => {
+        app.canvas?.selectNodes?.([node]);
+      }, { capture: true });
+
+      const idleLook = () => {
+        dropZone.style.background = "rgba(60,90,150,0.15)";
+        dropZone.style.borderColor = "#5a7abf";
+      };
+
+      node.addDOMWidget("hrmod_dropzone", "HRmodDropZone", root, {
+        getValue() { return ""; },
+        setValue() {},
+        computeSize(width) { return [width, DROPZONE_MIN_H + 12]; },
+      });
+
+      if (!node.size || node.size[1] < 200) node.setSize([320, 230]);
 
       const clearSelection = () => {
         combo.options.values = ["None"];
         combo.value = "None";
-        this.setDirtyCanvas?.(true);
+        fileInput.value = "";
+        if (statusEl) {
+          statusEl.textContent = "Cleared.";
+          statusEl.style.color = "#8899bb";
+        }
+        node.setDirtyCanvas?.(true);
       };
 
-      const dropZone = this.addWidget("button", "Drop .safetensors files here", "", () => {
-        fileInput.click();
-      });
-      if (dropZone?.inputEl) {
-        dropZone.inputEl.style.minHeight = "72px";
-        dropZone.inputEl.style.padding = "10px";
-        dropZone.inputEl.style.whiteSpace = "normal";
-        dropZone.inputEl.style.display = "flex";
-        dropZone.inputEl.style.alignItems = "center";
-        dropZone.inputEl.style.justifyContent = "center";
-        dropZone.inputEl.style.border = "1px dashed rgba(120, 140, 180, 0.9)";
-        dropZone.inputEl.style.borderRadius = "8px";
-        dropZone.inputEl.style.background = "rgba(90, 120, 150, 0.12)";
-        dropZone.inputEl.style.color = "#e5eefb";
-        dropZone.inputEl.style.fontWeight = "600";
-      }
-
-      const uploadButton = this.addWidget("button", "Choose file(s) to upload", "", () => {
-        fileInput.click();
-      });
-
-      const clearButton = this.addWidget("button", "Clear uploaded list", "", () => {
+      this.addWidget("button", "Clear uploaded list", "", () => {
         clearSelection();
-        fileInput.value = "";
       });
 
       const mergeUploadedNames = (newNames) => {
@@ -102,16 +129,24 @@ app.registerExtension({
 
       const processFiles = async (incomingFiles) => {
         const files = uniqueSafetensorsFiles(incomingFiles);
-        if (!files.length) return;
-
-        uploadButton.name = "Uploading...";
-        clearButton.name = "Uploading...";
-        this.setDirtyCanvas?.(true);
+        if (!files.length) {
+          if (statusEl) {
+            statusEl.textContent = "No .safetensors file in that drop.";
+            statusEl.style.color = "#ffb0b0";
+          }
+          return;
+        }
 
         const uploadedNames = [];
 
         try {
-          for (const file of files) {
+          for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            if (statusEl) {
+              statusEl.textContent = `Uploading ${i + 1}/${files.length}: ${normalizeFileName(file.name)}`;
+              statusEl.style.color = "#8ebaff";
+            }
+
             const formData = new FormData();
             const safeName = normalizeFileName(file.webkitRelativePath || file.name || file.path || "");
             formData.append("file", file, safeName);
@@ -140,55 +175,68 @@ app.registerExtension({
           }
 
           mergeUploadedNames(uploadedNames);
-          uploadButton.name = "Choose file(s) to upload";
-          clearButton.name = "Clear uploaded list";
-          this.setDirtyCanvas?.(true);
+          if (statusEl) {
+            statusEl.textContent = `Uploaded ${uploadedNames.length} file(s).`;
+            statusEl.style.color = "#8fdcae";
+          }
+          node.setDirtyCanvas?.(true);
         } catch (err) {
-          uploadButton.name = "Upload failed";
-          clearButton.name = "Clear uploaded list";
+          if (statusEl) {
+            statusEl.textContent = `Upload failed: ${err.message}`;
+            statusEl.style.color = "#ffb0b0";
+          }
           console.error(err);
         } finally {
           fileInput.value = "";
         }
       };
 
-      fileInput.addEventListener("change", async () => {
-        await processFiles(Array.from(fileInput.files || []));
+      // ── picker ────────────────────────────────────────────────────────────
+      dropZone.addEventListener("click", () => fileInput.click());
+
+      fileInput.addEventListener("change", () => {
+        const files = Array.from(fileInput.files || []);
+        fileInput.value = "";
+        processFiles(files);
       });
 
-      const handleDropFiles = async (event) => {
-        if (!event.dataTransfer || !event.dataTransfer.files || !event.dataTransfer.files.length) {
-          return;
-        }
-
-        const files = Array.from(event.dataTransfer.files);
-        if (!files.some(isSafetensorsFile)) {
-          return;
-        }
-
+      // ── drag & drop on the drop zone ──────────────────────────────────────
+      dropZone.addEventListener("dragenter", (event) => {
         event.preventDefault();
         event.stopPropagation();
-        await processFiles(files);
+      });
+
+      dropZone.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        dropZone.style.background = "rgba(90,122,191,0.45)";
+        dropZone.style.borderColor = "#aaccff";
+      });
+
+      dropZone.addEventListener("dragleave", (event) => {
+        if (dropZone.contains(event.relatedTarget)) return;
+        idleLook();
+      });
+
+      dropZone.addEventListener("drop", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        idleLook();
+        const files = Array.from(event.dataTransfer?.files || []);
+        processFiles(files);
+      });
+
+      // ── drop directly onto the node body ──────────────────────────────────
+      const prevOnDrop = node.onDrop;
+      node.onDrop = async (event) => {
+        if (!event?.dataTransfer?.files?.length) {
+          return prevOnDrop ? prevOnDrop.call(node, event) : false;
+        }
+        event.preventDefault?.();
+        event.stopPropagation?.();
+        await processFiles(Array.from(event.dataTransfer.files));
+        return false;
       };
-
-      if (dropZone?.inputEl) {
-        dropZone.inputEl.addEventListener("dragover", (event) => {
-          if (!event.dataTransfer || !Array.from(event.dataTransfer.files || []).some(isSafetensorsFile)) {
-            return;
-          }
-          event.preventDefault();
-          event.stopPropagation();
-          dropZone.inputEl.style.borderColor = "rgba(110, 220, 160, 0.95)";
-          dropZone.inputEl.style.background = "rgba(110, 220, 160, 0.12)";
-        });
-
-        dropZone.inputEl.addEventListener("dragleave", () => {
-          dropZone.inputEl.style.borderColor = "rgba(120, 140, 180, 0.9)";
-          dropZone.inputEl.style.background = "rgba(90, 120, 150, 0.12)";
-        });
-
-        dropZone.inputEl.addEventListener("drop", handleDropFiles);
-      }
     };
   },
 });
