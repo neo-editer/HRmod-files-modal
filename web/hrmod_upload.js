@@ -54,6 +54,23 @@ app.registerExtension({
         this.setDirtyCanvas?.(true);
       };
 
+      const dropZone = this.addWidget("button", "Drop .safetensors files here", "", () => {
+        fileInput.click();
+      });
+      if (dropZone?.inputEl) {
+        dropZone.inputEl.style.minHeight = "72px";
+        dropZone.inputEl.style.padding = "10px";
+        dropZone.inputEl.style.whiteSpace = "normal";
+        dropZone.inputEl.style.display = "flex";
+        dropZone.inputEl.style.alignItems = "center";
+        dropZone.inputEl.style.justifyContent = "center";
+        dropZone.inputEl.style.border = "1px dashed rgba(120, 140, 180, 0.9)";
+        dropZone.inputEl.style.borderRadius = "8px";
+        dropZone.inputEl.style.background = "rgba(90, 120, 150, 0.12)";
+        dropZone.inputEl.style.color = "#e5eefb";
+        dropZone.inputEl.style.fontWeight = "600";
+      }
+
       const uploadButton = this.addWidget("button", "Choose file(s) to upload", "", () => {
         fileInput.click();
       });
@@ -139,15 +156,7 @@ app.registerExtension({
         await processFiles(Array.from(fileInput.files || []));
       });
 
-      this.onDragOver = (event) => {
-        if (!event.dataTransfer || !Array.from(event.dataTransfer.files || []).some(isSafetensorsFile)) {
-          return;
-        }
-        event.preventDefault();
-        event.stopPropagation();
-      };
-
-      this.onDrop = async (event) => {
+      const handleDropFiles = async (event) => {
         if (!event.dataTransfer || !event.dataTransfer.files || !event.dataTransfer.files.length) {
           return;
         }
@@ -161,6 +170,25 @@ app.registerExtension({
         event.stopPropagation();
         await processFiles(files);
       };
+
+      if (dropZone?.inputEl) {
+        dropZone.inputEl.addEventListener("dragover", (event) => {
+          if (!event.dataTransfer || !Array.from(event.dataTransfer.files || []).some(isSafetensorsFile)) {
+            return;
+          }
+          event.preventDefault();
+          event.stopPropagation();
+          dropZone.inputEl.style.borderColor = "rgba(110, 220, 160, 0.95)";
+          dropZone.inputEl.style.background = "rgba(110, 220, 160, 0.12)";
+        });
+
+        dropZone.inputEl.addEventListener("dragleave", () => {
+          dropZone.inputEl.style.borderColor = "rgba(120, 140, 180, 0.9)";
+          dropZone.inputEl.style.background = "rgba(90, 120, 150, 0.12)";
+        });
+
+        dropZone.inputEl.addEventListener("drop", handleDropFiles);
+      }
     };
   },
 });

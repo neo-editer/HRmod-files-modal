@@ -164,6 +164,6 @@ NODE_CLASS_MAPPINGS = {
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "HRmodUploadRefMod": "Upload H3 RefMod",
+    "HRmodUploadRefMod": "Upload H3 RefMod V2",
     "HRmodDownloadRefMod": "Download H3 RefMod",
 }
