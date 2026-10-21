@@ -139,14 +139,15 @@ app.registerExtension({
         await processFiles(Array.from(fileInput.files || []));
       });
 
-      document.addEventListener("dragover", (event) => {
+      this.onDragOver = (event) => {
         if (!event.dataTransfer || !Array.from(event.dataTransfer.files || []).some(isSafetensorsFile)) {
           return;
         }
         event.preventDefault();
-      });
+        event.stopPropagation();
+      };
 
-      document.addEventListener("drop", async (event) => {
+      this.onDrop = async (event) => {
         if (!event.dataTransfer || !event.dataTransfer.files || !event.dataTransfer.files.length) {
           return;
         }
@@ -159,7 +160,7 @@ app.registerExtension({
         event.preventDefault();
         event.stopPropagation();
         await processFiles(files);
-      });
+      };
     };
   },
 });
