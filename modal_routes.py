@@ -3,6 +3,36 @@ import os
 from aiohttp import web
 
 
+def normalize_uploaded_file_names(raw_names):
+    seen = set()
+    normalized = []
+
+    for raw in raw_names or []:
+        if raw is None:
+            continue
+
+        value = str(raw).strip()
+        if not value:
+            continue
+
+        value = value.replace("\\", "/")
+        candidate = os.path.basename(value)
+        if not candidate:
+            continue
+
+        candidate = candidate.replace("/", "_").replace("\\", "_")
+        if not candidate.lower().endswith(".safetensors"):
+            continue
+
+        key = candidate.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        normalized.append(candidate)
+
+    return normalized
+
+
 def _safe_refmods_dir():
     candidates = []
     try:
@@ -63,28 +93,46 @@ def register_modal_upload_route(server):
     @server.routes.post("/hrmod/upload_refmod")
     async def hrmod_upload_refmod(request):
         data = await request.post()
-        uploaded = data.get("file")
-        if uploaded is None:
-            return web.json_response({"error": "No file uploaded"}, status=400)
+        files = data.getall("file", []) if hasattr(data, "getall") else []
+        if not files:
+            uploaded = data.get("file")
+            if uploaded is not None:
+                files = [uploaded]
 
-        filename = (getattr(uploaded, "filename", "") or "").strip()
-        if not filename:
-            return web.json_response({"error": "No filename"}, status=400)
-        if not filename.endswith(".safetensors"):
-            return web.json_response({"error": "Only .safetensors files are allowed"}, status=400)
+        if not files:
+            return web.json_response({"error": "No file uploaded"}, status=400)
 
         root = _safe_refmods_dir()
         os.makedirs(root, exist_ok=True)
 
-        safe_name = os.path.basename(filename).replace("/", "_").replace("\\", "_")
-        target = os.path.join(root, safe_name)
-        idx = 2
-        stem, ext = os.path.splitext(safe_name)
-        while os.path.exists(target):
-            target = os.path.join(root, f"{stem}_{idx}{ext}")
-            idx += 1
+        uploaded_names = []
+        for uploaded in files:
+            filename = (getattr(uploaded, "filename", "") or "").strip()
+            if not filename:
+                continue
 
-        with open(target, "wb") as f:
-            f.write(uploaded.file.read())
+            safe_name = normalize_uploaded_file_names([filename])
+            if not safe_name:
+                return web.json_response({"error": "Only .safetensors files are allowed"}, status=400)
 
-        return web.json_response({"status": "ok", "filename": os.path.basename(target)})
+            safe_name = safe_name[0]
+            target = os.path.join(root, safe_name)
+            idx = 2
+            stem, ext = os.path.splitext(safe_name)
+            while os.path.exists(target):
+                target = os.path.join(root, f"{stem}_{idx}{ext}")
+                idx += 1
+
+            with open(target, "wb") as f:
+                f.write(uploaded.file.read())
+
+            uploaded_names.append(os.path.basename(target))
+
+        if not uploaded_names:
+            return web.json_response({"error": "No valid .safetensors files were uploaded"}, status=400)
+
+        return web.json_response({
+            "status": "ok",
+            "filename": uploaded_names[0] if len(uploaded_names) == 1 else None,
+            "filenames": uploaded_names,
+        })
